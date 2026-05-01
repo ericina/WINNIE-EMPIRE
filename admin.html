@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Winnie Empire - Admin Portal</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #fdf0f5; color: #1a0010; margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(180,0,90,0.1); }
+        h1 { color: #b5005b; border-bottom: 2px solid #f7c5db; padding-bottom: 10px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab { padding: 10px 20px; background: #fdf0f5; border: 1px solid #f7c5db; cursor: pointer; border-radius: 8px; font-weight: bold; }
+        .tab.active { background: #b5005b; color: white; }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+        button { background: #e0397a; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #b5005b; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background: #fdf0f5; color: #b5005b; }
+        .badge { padding: 5px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; }
+        .pending { background: #ff9800; }
+        .completed { background: #4caf50; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Winnie Empire Admin Portal</h1>
+    
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('orders')">View Orders</div>
+        <div class="tab" onclick="switchTab('products')">Post New Product</div>
+    </div>
+
+    <div id="orders" class="panel active">
+        <h2>Customer Orders</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>Date</th>
+                    <th>Customer</th>
+                    <th>Items</th>
+                    <th>Total (₦)</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="ordersTableBody">
+                <tr><td colspan="7">Loading orders...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="products" class="panel">
+        <h2>Post a New Product</h2>
+        <form id="addProductForm">
+            <div class="form-group">
+                <label>Product Name</label>
+                <input type="text" id="p_name" required>
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <select id="p_category" required>
+                    <option value="Raw Donor">Raw Donor</option>
+                    <option value="Bone Straight">Bone Straight</option>
+                    <option value="Curly & Wavy">Curly & Wavy</option>
+                    <option value="Accessories">Accessories</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Price (₦)</label>
+                <input type="number" id="p_price" required>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="p_desc" rows="3" required></textarea>
+            </div>
+            <div class="form-group">
+                <label>Image URL</label>
+                <input type="text" id="p_image" placeholder="https://link-to-your-image.jpg" required>
+            </div>
+            <button type="submit">Post Product to Website</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    const API_URL = 'api.php';
+
+    // Switch Tabs
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        event.target.classList.add('active');
+        document.getElementById(tabId).classList.add('active');
+        if (tabId === 'orders') fetchOrders();
+    }
+
+    // Fetch and display orders
+    async function fetchOrders() {
+        try {
+            const res = await fetch(`${API_URL}?action=get_orders`);
+            const orders = await res.json();
+            const tbody = document.getElementById('ordersTableBody');
+            tbody.innerHTML = '';
+
+            if(orders.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7">No orders yet.</td></tr>';
+                return;
+            }
+
+            // Reverse to show newest first
+            orders.reverse().forEach(order => {
+                let itemsList = order.items.map(i => `${i.qty}x ${i.name}`).join(', ');
+                let btn = order.status === 'pending' 
+                    ? `<button onclick="markCompleted('${order.id}')" style="padding: 6px 12px; font-size:12px;">Mark Completed</button>`
+                    : `✔ Done`;
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${order.id}</strong></td>
+                        <td>${new Date(order.date).toLocaleString()}</td>
+                        <td>${order.customer.name}<br><small>${order.customer.phone}</small></td>
+                        <td>${itemsList}</td>
+                        <td>₦${order.total.toLocaleString()}</td>
+                        <td><span class="badge ${order.status}">${order.status.toUpperCase()}</span></td>
+                        <td>${btn}</td>
+                    </tr>
+                `;
+            });
+        } catch(e) {
+            console.error("Failed to load orders", e);
+        }
+    }
+
+    // Mark an order as completed
+    async function markCompleted(orderId) {
+        if(!confirm("Mark this order as completed?")) return;
+        await fetch(`${API_URL}?action=update_order_status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: orderId, status: 'completed' })
+        });
+        fetchOrders(); // Refresh table
+    }
+
+    // Add a new product
+    document.getElementById('addProductForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            name: document.getElementById('p_name').value,
+            category: document.getElementById('p_category').value,
+            price: document.getElementById('p_price').value,
+            desc: document.getElementById('p_desc').value,
+            image: document.getElementById('p_image').value
+        };
+
+        const res = await fetch(`${API_URL}?action=add_product`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        alert(data.message);
+        e.target.reset();
+    });
+
+    // Initialize
+    fetchOrders();
+</script>
+
+</body>
+</html>
